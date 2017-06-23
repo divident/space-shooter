@@ -8,6 +8,7 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 import javax.swing.JPanel;
 import javax.swing.Timer;
@@ -21,7 +22,7 @@ import com.jaca.Game.GameStatus;
  * uruchamia strzelanie przez przeciwników . Klasa dziedzy po JPanel.
  *
  */
-public class Board extends JPanel {
+public class Board extends JPanel implements Runnable {
 
 	static final long serialVersionUID = 1L;
 
@@ -33,10 +34,8 @@ public class Board extends JPanel {
 	private BufferedImage back1;
 	private Upgrade upgrade;
 	private Upgrade currentUpgrade;
-	private Timer timer;
 	private Timer shootTimer;
 	private Timer upgradeTimer;
-	private final int DELAY = 30;
 	private final int SHOOT_DELAY = 300;
 	private int shootInitDelay = 400;
 	private int shootRandomDelay = SHOOT_DELAY;
@@ -57,11 +56,16 @@ public class Board extends JPanel {
 	 * uruchamiane s¹ równie¿ timery odpowiadaj¹ce za animacjê oraz pojawianie
 	 * siê przeciwników i ulepszeñ.
 	 * 
-	 * @param enemies tablica obietków Enemy
-	 * @param bullets tablica obiektów Bullet
-	 * @param player  obiekt gracza
-	 * @param back obiekt t³a
-	 * @param game obiekt game
+	 * @param enemies
+	 *            tablica obietków Enemy
+	 * @param bullets
+	 *            tablica obiektów Bullet
+	 * @param player
+	 *            obiekt gracza
+	 * @param back
+	 *            obiekt t³a
+	 * @param game
+	 *            obiekt game
 	 */
 	public Board(ArrayList<Enemy> enemies, ArrayList<Bullet> bullets, Player player, Background back, Game game) {
 		game.remove(game.getMenu());
@@ -73,10 +77,6 @@ public class Board extends JPanel {
 		this.game = game;
 		this.back = back;
 		this.random = Game.getRandom();
-		// uruchomienie animacji
-		timer = new Timer(DELAY, animation);
-		timer.setInitialDelay(0);
-		timer.start();
 
 		// uruchamianie animacji strza³ów przeciwników
 		shootTimer = new Timer(shootInitDelay + random.nextInt(shootRandomDelay), enemyShoot);
@@ -92,6 +92,48 @@ public class Board extends JPanel {
 		game.getUpgradeHud().setCurrentValue(0);
 		game.setCurrentWave(0);
 
+	}
+
+	@Override
+	public void run() {
+		while (!Thread.interrupted()) {
+			// tworzenie nowej fali wrogów lub bossa
+			if (enemies.isEmpty() && !game.isBossAlive()) {
+				if (game.getCurrentWave() == 2) {
+					if (game.getBossHud().getCurrentValue() == 0 && !game.isBossSpawn()) {
+						game.getBossHud().setCurrentValue(game.getBoss().getHealth());
+					}
+					game.setBossSpawn(true);
+					game.setBossAlive(true);
+					shootTimer.setDelay(bossShootDelay);
+					enemies.clear();
+				} else {
+					shootTimer.setDelay(shootInitDelay + random.nextInt(shootRandomDelay));
+					game.spawnNewWave();
+					game.setCurrentWave(game.getCurrentWave() + 1);
+					shootRandomDelay = Math.max(1, shootRandomDelay - (game.getCurrentWave() * delayDiff));
+					Enemy.setEnemySpeed(Enemy.getEnemySpeed() + speedBoost);
+					shootTimer.setDelay(shootInitDelay + random.nextInt(shootRandomDelay));
+				}
+			}
+
+			for (GameObject object : bullets) {
+				object.animate();
+			}
+
+			for (GameObject object : enemies) {
+				object.animate();
+			}
+
+			player.animate();
+			game.getBoss().animate();
+			try {
+				TimeUnit.MILLISECONDS.sleep(30);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			repaint();
+		}
 	}
 
 	// funkcja rysuj¹ca wszystkie obiekty gry
@@ -163,7 +205,7 @@ public class Board extends JPanel {
 
 			bullet.draw(g);
 		}
-
+		
 		for (GameObject object : enemies) {
 			object.draw(g);
 		}
@@ -203,52 +245,6 @@ public class Board extends JPanel {
 		game.getUpgradeHud().draw(g);
 
 	}
-
-	// objekt odpowiadaj¹cy za animacjê
-	ActionListener animation = new ActionListener() {
-		/*
-		 * (non-Javadoc)
-		 * 
-		 * @see java.awt.event.ActionListener#actionPerformed(java.awt.event.
-		 * ActionEvent)
-		 */
-		@Override
-		public void actionPerformed(ActionEvent event) {
-
-			// tworzenie nowej fali wrogów lub bossa
-			if (enemies.isEmpty() && !game.isBossAlive()) {
-				if (game.getCurrentWave() == 2) {
-					if (game.getBossHud().getCurrentValue() == 0 && !game.isBossSpawn()) {
-						game.getBossHud().setCurrentValue(game.getBoss().getHealth());
-					}
-					game.setBossSpawn(true);
-					game.setBossAlive(true);
-					shootTimer.setDelay(bossShootDelay);
-					enemies.clear();
-				} else {
-					shootTimer.setDelay(shootInitDelay + random.nextInt(shootRandomDelay));
-					game.spawnNewWave();
-					game.setCurrentWave(game.getCurrentWave() + 1);
-					shootRandomDelay = Math.max(1, shootRandomDelay - (game.getCurrentWave() * delayDiff));
-					Enemy.setEnemySpeed(Enemy.getEnemySpeed() + speedBoost);
-					shootTimer.setDelay(shootInitDelay + random.nextInt(shootRandomDelay));
-				}
-			}
-
-			for (GameObject object : bullets) {
-				object.animate();
-			}
-
-			for (GameObject object : enemies) {
-				object.animate();
-			}
-
-			player.animate();
-			game.getBoss().animate();
-
-			repaint();
-		}
-	};
 
 	// obiekt odpowiadaj¹cy za strza³y przeciwników
 	ActionListener enemyShoot = new ActionListener() {

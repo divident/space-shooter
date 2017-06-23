@@ -117,6 +117,9 @@ public class Game extends JFrame implements Runnable {
 		setSize(WIDTH, HEIGHT);
 		setResizable(false);
 		setVisible(true);
+		
+		Thread t = new Thread(board);
+		t.start();
 	}
 
 	/**
